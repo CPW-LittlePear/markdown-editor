@@ -29,22 +29,37 @@ function getTokenRaw(token) {
   return token.text || ''
 }
 
+// 计算在 content 中 token 索引对应的偏移量
+function tokenOffset(content, index) {
+  const tokens = marked.lexer(content)
+  let offset = 0
+  for (let i = 0; i < index && i < tokens.length; i++) {
+    offset += (tokens[i]?.raw || '').length
+  }
+  return offset
+}
+
 export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme }) {
   const [editingIndex, setEditingIndex] = useState(null)
   const [editText, setEditText] = useState('')
   const textareaRef = useRef(null)
   const containerRef = useRef(null)
-  const pendingInsertRef = useRef(null) // { offset: number } — edita 提交后自动在此插入
-  const editBeforeInsertRef = useRef(null) // 记录点击+时正在编辑的旧内容，等content更新后执行
+  const contentRef = useRef(content) // 始终跟踪最新 content
+  const pendingInsertIndexRef = useRef(null) // 等 content 更新后在此索引前插入
+  const autoEditRef = useRef(false) // 插入后自动编辑新块
+
+  // 同步 content ref
+  useEffect(() => {
+    contentRef.current = content
+  })
 
   useEffect(() => { initMermaid() }, [])
 
-  // 解析 token
   const tokens = useMemo(() => {
     try { return marked.lexer(content) } catch { return [] }
   }, [content])
 
-  // mermaid 渲染
+  // mermaid
   useEffect(() => {
     if (!containerRef.current) return
     const els = containerRef.current.querySelectorAll('.mermaid:not(.mermaid-rendered)')
@@ -59,31 +74,44 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     })
   }, [content])
 
-  // content 更新后，检查是否有待处理的插入
+  // content 更新后处理待插入
   useEffect(() => {
-    const pending = pendingInsertRef.current
-    if (!pending) return
-    pendingInsertRef.current = null
+    const insertIndex = pendingInsertIndexRef.current
+    if (insertIndex === null) return
+    pendingInsertIndexRef.current = null
 
-    // 在 newTokens 中找插入位置之后的第一个可编辑 token
+    // 在最新 content 中计算偏移并插入
+    const ct = content
+    const offset = tokenOffset(ct, insertIndex)
+    const prefix = offset > 0 && ct[offset - 1] !== '\n' ? '\n' : ''
+    const suffix = offset < ct.length && ct[offset] !== '\n' ? '\n' : ''
+    const newContent = ct.slice(0, offset) + prefix + '\n\n' + suffix + ct.slice(offset)
+
+    // 标记需要自动编辑新块
+    autoEditRef.current = offset + prefix.length
+    onChange(newContent)
+  }, [content])
+
+  // content 更新后自动编辑新插入的块
+  useEffect(() => {
+    if (autoEditRef.current === false) return
+    const targetOffset = autoEditRef.current
+    autoEditRef.current = false
+
     const newTokens = marked.lexer(content)
     let pos = 0
-    let targetIdx = -1
     for (let i = 0; i < newTokens.length; i++) {
       const raw = newTokens[i].raw || ''
-      if (pos >= pending.offset && newTokens[i].type !== 'space') {
-        targetIdx = i
-        break
+      if (pos >= targetOffset && newTokens[i].type !== 'space') {
+        setEditingIndex(i)
+        setEditText('')
+        return
       }
       pos += raw.length
     }
-    if (targetIdx >= 0) {
-      setEditingIndex(targetIdx)
-      setEditText('')
-    }
   }, [content])
 
-  // 自动聚焦 + 自适应高度
+  // 自动聚焦 + 高度
   useEffect(() => {
     if (editingIndex !== null && textareaRef.current) {
       const ta = textareaRef.current
@@ -112,45 +140,33 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
   }, [editingIndex, tokens])
 
   // 提交编辑
-  const commitEdit = useCallback((callback) => {
-    if (editingIndex === null) {
-      callback?.()
-      return
-    }
+  const commitEdit = useCallback(() => {
+    if (editingIndex === null) return
     const token = tokens[editingIndex]
-    if (!token) { setEditingIndex(null); callback?.(); return }
+    if (!token) { setEditingIndex(null); return }
 
     const oldRaw = getTokenRaw(token)
     const newRaw = editText
-    const idx = content.indexOf(oldRaw)
+
+    // 用 ref 中的最新 content
+    const ct = contentRef.current
+    const idx = ct.indexOf(oldRaw)
 
     let newContent
     if (idx === -1) {
       const newTokens = tokens.map((t, i) => i === editingIndex ? { ...t, raw: newRaw } : t)
       newContent = newTokens.map(t => t.raw || '').join('')
     } else {
-      newContent = content.slice(0, idx) + newRaw + content.slice(idx + oldRaw.length)
+      newContent = ct.slice(0, idx) + newRaw + ct.slice(idx + oldRaw.length)
     }
 
     setEditingIndex(null)
-    if (newContent !== content) {
-      onChange(newContent)
-      // 等 content 更新后执行回调
-      if (callback) {
-        // 用 setTimeout 等 React 更新
-        setTimeout(callback, 0)
-      }
-    } else {
-      callback?.()
-    }
-  }, [editingIndex, editText, tokens, content, onChange])
+    if (newContent !== ct) onChange(newContent)
+  }, [editingIndex, editText, tokens, onChange])
 
-  // 编辑态暴露格式化接口
+  // 格式接口
   useEffect(() => {
-    if (editingIndex === null) {
-      delete window.__mdEditorFormat
-      return
-    }
+    if (editingIndex === null) { delete window.__mdEditorFormat; return }
     window.__mdEditorFormat = (type, value) => {
       const ta = textareaRef.current
       if (!ta) return
@@ -175,42 +191,36 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); commitEdit() }
   }, [commitEdit])
 
-  // 插入新块（先提交当前编辑，再插入）
-  const handleInsert = useCallback((index) => {
-    // 计算基于当前 content 和 tokens 的偏移量
-    const currentTokens = marked.lexer(content)
-    let offset = 0
-    for (let i = 0; i < index && i < currentTokens.length; i++) {
-      offset += (currentTokens[i]?.raw || '').length
-    }
-    const prefix = offset > 0 && content[offset - 1] !== '\n' ? '\n' : ''
-    const suffix = offset < content.length && content[offset] !== '\n' ? '\n' : ''
-
-    const doInsert = () => {
-      const latestContent = content // from closure, but commitEdit just updated it
-      // 直接用当前 content 计算
-      const ct = latestContent
-      let off = 0
-      const tk = marked.lexer(ct)
-      for (let i = 0; i < index && i < tk.length; i++) {
-        off += (tk[i]?.raw || '').length
+  // 延迟失焦提交（给 mousedown 时间先执行）
+  const handleBlur = useCallback(() => {
+    setTimeout(() => {
+      if (textareaRef.current && document.activeElement !== textareaRef.current) {
+        commitEdit()
       }
-      const pf = off > 0 && ct[off - 1] !== '\n' ? '\n' : ''
-      const sf = off < ct.length && ct[off] !== '\n' ? '\n' : ''
-      const newContent = ct.slice(0, off) + pf + '\n\n' + sf + ct.slice(off)
-      pendingInsertRef.current = { offset: off + pf.length }
+    }, 150)
+  }, [commitEdit])
+
+  // 插入新块 —— 核心逻辑
+  // 如果正在编辑：先提交 → content 更新后由 useEffect 执行实际插入
+  // 如果未编辑：直接插入
+  const handleInsert = useCallback((index) => {
+    if (editingIndex !== null) {
+      // 有正在编辑的块：先提交，标记等待插入
+      pendingInsertIndexRef.current = index
+      commitEdit()
+    } else {
+      // 无编辑：直接插入
+      const ct = contentRef.current
+      const offset = tokenOffset(ct, index)
+      const prefix = offset > 0 && ct[offset - 1] !== '\n' ? '\n' : ''
+      const suffix = offset < ct.length && ct[offset] !== '\n' ? '\n' : ''
+      const newContent = ct.slice(0, offset) + prefix + '\n\n' + suffix + ct.slice(offset)
+      autoEditRef.current = offset + prefix.length
       onChange(newContent)
     }
+  }, [editingIndex, commitEdit, onChange])
 
-    // 如果正在编辑，先提交
-    if (editingIndex !== null) {
-      commitEdit(doInsert)
-    } else {
-      doInsert()
-    }
-  }, [content, editingIndex, onChange, commitEdit])
-
-  // 渲染单个 token
+  // 渲染 token
   const renderToken = useCallback((token) => {
     try {
       if (token.type === 'html') return token.text
@@ -219,18 +229,8 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     } catch { return '' }
   }, [])
 
-  // 失焦提交（不拦截插入回调）
-  const handleBlur = useCallback(() => {
-    // 延迟执行，让点击+的事件先触发
-    setTimeout(() => {
-      if (textareaRef.current && document.activeElement !== textareaRef.current) {
-        // 只有真的失焦才提交（没有 pending 插入时）
-        if (!pendingInsertRef.current) {
-          commitEdit()
-        }
-      }
-    }, 100)
-  }, [commitEdit])
+  // 第一个可渲染 token 的索引
+  const firstRealIdx = tokens.findIndex(t => t.type !== 'space' || (t.raw && t.raw.trim()))
 
   return (
     <div className={`wysiwyg-pane ${theme}`}>
@@ -286,11 +286,10 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
 
           return (
             <div key={index} className="wysiwyg-row">
-              <div className="wysiwyg-insert-bar" onMouseDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                handleInsert(index)
-              }}>
+              <div
+                className="wysiwyg-insert-bar"
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsert(index) }}
+              >
                 <span className="wysiwyg-plus">+</span>
               </div>
               {block}
@@ -298,12 +297,12 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
           )
         })}
 
-        {/* 末尾插入按钮 */}
+        {/* 末尾 + */}
         {content && (
-          <div className="wysiwyg-insert-bar" onMouseDown={(e) => {
-            e.preventDefault()
-            handleInsert(tokens.length)
-          }}>
+          <div
+            className="wysiwyg-insert-bar"
+            onMouseDown={(e) => { e.preventDefault(); handleInsert(tokens.length) }}
+          >
             <span className="wysiwyg-plus">+</span>
           </div>
         )}
