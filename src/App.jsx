@@ -3,6 +3,7 @@ import Toolbar from './components/Toolbar'
 import DocList from './components/DocList'
 import Editor from './components/Editor'
 import Preview from './components/Preview'
+import Wysiwyg from './components/Wysiwyg'
 import {
   loadDocs, createDoc, updateDoc, deleteDoc, renameDoc,
   getDoc, getActiveDocId, setActiveDocId,
@@ -259,17 +260,29 @@ export default function App() {
         />
 
         <div className="content-area">
-          {(viewMode === 'split' || viewMode === 'preview') && (
-            <Preview content={content} fontSize={fontSize} lineHeight={lineHeight} theme={theme} />
-          )}
-          {(viewMode === 'split' || viewMode === 'edit') && (
-            <Editor
+          {viewMode === 'wysiwyg' ? (
+            <Wysiwyg
               content={content}
               onChange={setContent}
               fontSize={fontSize}
               lineHeight={lineHeight}
               theme={theme}
             />
+          ) : (
+            <>
+              {(viewMode === 'split' || viewMode === 'preview') && (
+                <Preview content={content} fontSize={fontSize} lineHeight={lineHeight} theme={theme} />
+              )}
+              {(viewMode === 'split' || viewMode === 'edit') && (
+                <Editor
+                  content={content}
+                  onChange={setContent}
+                  fontSize={fontSize}
+                  lineHeight={lineHeight}
+                  theme={theme}
+                />
+              )}
+            </>
           )}
         </div>
       </div>

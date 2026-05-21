@@ -325,6 +325,71 @@ html, body, #root {
   flex: 1;
 }
 
+/* ---- Typora WYSIWYG 模式 ---- */
+.layout-wysiwyg .content-area > .wysiwyg-pane {
+  flex: 1;
+}
+
+.wysiwyg-pane {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-preview);
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.wysiwyg-content {
+  width: 100%;
+  max-width: 860px;
+  padding: 48px 60px;
+  min-height: 100%;
+}
+
+.wysiwyg-placeholder {
+  color: var(--placeholder-color);
+  font-size: 16px;
+  cursor: text;
+  padding: 24px 0;
+}
+
+.wysiwyg-block {
+  cursor: text;
+  position: relative;
+  border-left: 2px solid transparent;
+  padding: 3px 0 3px 12px;
+  margin: 0 -12px;
+  border-radius: 0 4px 4px 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.wysiwyg-block:hover {
+  border-left-color: var(--border);
+  background: var(--toolbar-btn-hover);
+}
+
+.wysiwyg-block.editing {
+  border-left-color: var(--accent);
+  background: transparent;
+  padding-left: 0;
+  margin: 0;
+}
+
+.wysiwyg-textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
+  line-height: 1.8;
+  min-height: 1.8em;
+  overflow: hidden;
+  padding: 0;
+  tab-size: 4;
+}
+
 /* =============================================
    文档列表侧边栏
    ============================================= */

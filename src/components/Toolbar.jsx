@@ -23,6 +23,7 @@ const Icons = {
   columns:      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="0.5" y="1" width="6" height="14" rx="1" stroke="currentColor"/><rect x="9.5" y="1" width="6" height="14" rx="1" stroke="currentColor"/></svg>,
   edit:         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="1.5" stroke="currentColor"/><line x1="4" y1="5" x2="12" y2="5" stroke="currentColor" strokeWidth="1.2"/><line x1="4" y1="8" x2="10" y2="8" stroke="currentColor" strokeWidth="1.2"/><line x1="4" y1="11" x2="8" y2="11" stroke="currentColor" strokeWidth="1.2"/></svg>,
   preview:      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor"/><path d="M1 8s3-6 7-6 7 6 7 6-3 6-7 6-7-6-7-6z" stroke="currentColor"/></svg>,
+  wysiwyg:      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="12" rx="1.5" stroke="currentColor"/><line x1="5" y1="6" x2="12" y2="6" stroke="currentColor" strokeWidth="1"/><line x1="5" y1="9" x2="10" y2="9" stroke="currentColor" strokeWidth="1"/><circle cx="3" cy="6" r="0.8" fill="currentColor"/></svg>,
   sun:          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor"/><line x1="8" y1="1" x2="8" y2="3" stroke="currentColor" strokeWidth="1.5"/><line x1="8" y1="13" x2="8" y2="15" stroke="currentColor" strokeWidth="1.5"/><line x1="1" y1="8" x2="3" y2="8" stroke="currentColor" strokeWidth="1.5"/><line x1="13" y1="8" x2="15" y2="8" stroke="currentColor" strokeWidth="1.5"/></svg>,
   moon:         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 10.5A6 6 0 015.5 3 5 5 0 1013 10.5z" stroke="currentColor" fill="currentColor" fillOpacity="0.2"/></svg>,
   undo:         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 3L1 7l4 4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 7h9a4 4 0 010 8H8" stroke="currentColor" strokeLinecap="round"/></svg>,
@@ -201,6 +202,9 @@ export default function Toolbar({
         </button>
         <button className={btnClass(viewMode === 'preview')} title="仅预览" onClick={() => setViewMode('preview')}>
           {Icons.preview}
+        </button>
+        <button className={btnClass(viewMode === 'wysiwyg')} title="Typora模式（点击编辑）" onClick={() => setViewMode('wysiwyg')}>
+          {Icons.wysiwyg}
         </button>
       </div>
 
