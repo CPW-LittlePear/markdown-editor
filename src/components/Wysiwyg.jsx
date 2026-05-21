@@ -34,7 +34,8 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
   const [editText, setEditText] = useState('')
   const textareaRef = useRef(null)
   const containerRef = useRef(null)
-  const insertOffsetRef = useRef(null) // 标记等待自动编辑的插入位置
+  const pendingInsertRef = useRef(null) // { offset: number } — edita 提交后自动在此插入
+  const editBeforeInsertRef = useRef(null) // 记录点击+时正在编辑的旧内容，等content更新后执行
 
   useEffect(() => { initMermaid() }, [])
 
@@ -58,24 +59,19 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     })
   }, [content])
 
-  // content 更新后，如果有待插入的 offset，找到新块并自动编辑
-  const prevContentRef = useRef(content)
+  // content 更新后，检查是否有待处理的插入
   useEffect(() => {
-    if (insertOffsetRef.current === null) {
-      prevContentRef.current = content
-      return
-    }
-    const targetOffset = insertOffsetRef.current
-    insertOffsetRef.current = null
+    const pending = pendingInsertRef.current
+    if (!pending) return
+    pendingInsertRef.current = null
 
-    // 在 newTokens 中找到 targetOffset 之后的第一个可编辑 token
+    // 在 newTokens 中找插入位置之后的第一个可编辑 token
     const newTokens = marked.lexer(content)
     let pos = 0
     let targetIdx = -1
     for (let i = 0; i < newTokens.length; i++) {
       const raw = newTokens[i].raw || ''
-      // 该 token 的起始位置 >= targetOffset 且不是 space
-      if (pos >= targetOffset && newTokens[i].type !== 'space') {
+      if (pos >= pending.offset && newTokens[i].type !== 'space') {
         targetIdx = i
         break
       }
@@ -85,7 +81,6 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
       setEditingIndex(targetIdx)
       setEditText('')
     }
-    prevContentRef.current = content
   }, [content])
 
   // 自动聚焦 + 自适应高度
@@ -117,10 +112,13 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
   }, [editingIndex, tokens])
 
   // 提交编辑
-  const commitEdit = useCallback(() => {
-    if (editingIndex === null) return
+  const commitEdit = useCallback((callback) => {
+    if (editingIndex === null) {
+      callback?.()
+      return
+    }
     const token = tokens[editingIndex]
-    if (!token) { setEditingIndex(null); return }
+    if (!token) { setEditingIndex(null); callback?.(); return }
 
     const oldRaw = getTokenRaw(token)
     const newRaw = editText
@@ -135,10 +133,19 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     }
 
     setEditingIndex(null)
-    if (newContent !== content) onChange(newContent)
+    if (newContent !== content) {
+      onChange(newContent)
+      // 等 content 更新后执行回调
+      if (callback) {
+        // 用 setTimeout 等 React 更新
+        setTimeout(callback, 0)
+      }
+    } else {
+      callback?.()
+    }
   }, [editingIndex, editText, tokens, content, onChange])
 
-  // 编辑态暴露格式化接口给工具栏
+  // 编辑态暴露格式化接口
   useEffect(() => {
     if (editingIndex === null) {
       delete window.__mdEditorFormat
@@ -168,18 +175,40 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); commitEdit() }
   }, [commitEdit])
 
-  // 插入新块
+  // 插入新块（先提交当前编辑，再插入）
   const handleInsert = useCallback((index) => {
+    // 计算基于当前 content 和 tokens 的偏移量
+    const currentTokens = marked.lexer(content)
     let offset = 0
-    for (let i = 0; i < index; i++) {
-      offset += (tokens[i]?.raw || '').length
+    for (let i = 0; i < index && i < currentTokens.length; i++) {
+      offset += (currentTokens[i]?.raw || '').length
     }
     const prefix = offset > 0 && content[offset - 1] !== '\n' ? '\n' : ''
     const suffix = offset < content.length && content[offset] !== '\n' ? '\n' : ''
-    const newContent = content.slice(0, offset) + prefix + '\n\n' + suffix + content.slice(offset)
-    insertOffsetRef.current = offset
-    onChange(newContent)
-  }, [content, tokens, onChange])
+
+    const doInsert = () => {
+      const latestContent = content // from closure, but commitEdit just updated it
+      // 直接用当前 content 计算
+      const ct = latestContent
+      let off = 0
+      const tk = marked.lexer(ct)
+      for (let i = 0; i < index && i < tk.length; i++) {
+        off += (tk[i]?.raw || '').length
+      }
+      const pf = off > 0 && ct[off - 1] !== '\n' ? '\n' : ''
+      const sf = off < ct.length && ct[off] !== '\n' ? '\n' : ''
+      const newContent = ct.slice(0, off) + pf + '\n\n' + sf + ct.slice(off)
+      pendingInsertRef.current = { offset: off + pf.length }
+      onChange(newContent)
+    }
+
+    // 如果正在编辑，先提交
+    if (editingIndex !== null) {
+      commitEdit(doInsert)
+    } else {
+      doInsert()
+    }
+  }, [content, editingIndex, onChange, commitEdit])
 
   // 渲染单个 token
   const renderToken = useCallback((token) => {
@@ -189,6 +218,19 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
       return marked.parser([token])
     } catch { return '' }
   }, [])
+
+  // 失焦提交（不拦截插入回调）
+  const handleBlur = useCallback(() => {
+    // 延迟执行，让点击+的事件先触发
+    setTimeout(() => {
+      if (textareaRef.current && document.activeElement !== textareaRef.current) {
+        // 只有真的失焦才提交（没有 pending 插入时）
+        if (!pendingInsertRef.current) {
+          commitEdit()
+        }
+      }
+    }, 100)
+  }, [commitEdit])
 
   return (
     <div className={`wysiwyg-pane ${theme}`}>
@@ -203,17 +245,9 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
           </div>
         )}
 
-        {/* 第一个块之前也显示插入按钮 */}
-        {tokens.length > 0 && tokens[0].type !== 'space' && (
-          <div className="wysiwyg-insert-bar" onClick={() => handleInsert(0)}>
-            <span className="wysiwyg-plus">+</span>
-          </div>
-        )}
-
         {tokens.map((token, index) => {
           const isEditing = editingIndex === index
 
-          // 空 token
           if (token.type === 'space' && (!token.raw || !token.raw.trim())) {
             return <div key={index} style={{ height: '0.6em' }} />
           }
@@ -225,7 +259,7 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
                 className="wysiwyg-textarea"
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                onBlur={commitEdit}
+                onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
                 spellCheck={false}
                 style={{
@@ -252,8 +286,11 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
 
           return (
             <div key={index} className="wysiwyg-row">
-              {/* 每行之前显示插入按钮 */}
-              <div className="wysiwyg-insert-bar" onClick={(e) => { e.stopPropagation(); handleInsert(index) }}>
+              <div className="wysiwyg-insert-bar" onMouseDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleInsert(index)
+              }}>
                 <span className="wysiwyg-plus">+</span>
               </div>
               {block}
@@ -263,7 +300,10 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
 
         {/* 末尾插入按钮 */}
         {content && (
-          <div className="wysiwyg-insert-bar" onClick={() => handleInsert(tokens.length)}>
+          <div className="wysiwyg-insert-bar" onMouseDown={(e) => {
+            e.preventDefault()
+            handleInsert(tokens.length)
+          }}>
             <span className="wysiwyg-plus">+</span>
           </div>
         )}
