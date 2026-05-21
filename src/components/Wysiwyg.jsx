@@ -58,14 +58,26 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     })
   }, [content])
 
-  // 自动聚焦 textarea
+  // 自动聚焦 + 自适应高度
   useEffect(() => {
     if (editingIndex !== null && textareaRef.current) {
       const ta = textareaRef.current
       ta.focus()
       ta.selectionStart = ta.selectionEnd = ta.value.length
+      // 自适应高度
+      ta.style.height = 'auto'
+      ta.style.height = ta.scrollHeight + 'px'
     }
   }, [editingIndex])
+
+  // 编辑文本变化时自适应高度
+  useEffect(() => {
+    if (editingIndex !== null && textareaRef.current) {
+      const ta = textareaRef.current
+      ta.style.height = 'auto'
+      ta.style.height = ta.scrollHeight + 'px'
+    }
+  }, [editText, editingIndex])
 
   // 获取 token 的原始 Markdown 文本
   const getTokenRaw = useCallback((token) => {
