@@ -61,6 +61,37 @@ export default function App() {
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
+
+    // 检测 URL hash 中的外部文件数据（右键打开 .md 文件时传入）
+    const hash = window.location.hash
+    if (hash.startsWith('#data=')) {
+      try {
+        const urlSafe = hash.slice(6)
+        // 还原 Base64：URL 安全字符转回标准 Base64
+        const base64 = urlSafe.replace(/-/g, '+').replace(/_/g, '/')
+        // 补齐 padding
+        const padding = base64.length % 4
+        const padded = padding ? base64 + '='.repeat(4 - padding) : base64
+        const bytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0))
+        const decoder = new TextDecoder('utf-8')
+        const decoded = decoder.decode(bytes)
+
+        if (decoded.trim()) {
+          const doc = createDoc(extractTitle(decoded), decoded)
+          setDocs([doc])
+          setActiveIdState(doc.id)
+          setContent(doc.content)
+          // 清除 hash 防止刷新重复加载
+          window.history.replaceState(null, '', window.location.pathname)
+          return
+        }
+      } catch (e) {
+        console.warn('解析外部文件失败:', e)
+      }
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+
+    // 正常初始化
     const allDocs = loadDocs()
     if (allDocs.length === 0) {
       const doc = createDoc(extractTitle(DEFAULT_CONTENT), DEFAULT_CONTENT)
