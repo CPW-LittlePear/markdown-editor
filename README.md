@@ -2,6 +2,8 @@
 
 纯前端 Markdown 在线编辑器，对标 Typora 简洁风格，支持离线运行。
 
+在线地址：https://cpw-littlepear.github.io/markdown-editor/
+
 ## 快速使用
 
 ### 方式一：直接打开（推荐）
