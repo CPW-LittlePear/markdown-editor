@@ -25,6 +25,7 @@ export default function DocList({
   docs,
   activeId,
   collapsed,
+  workspace,
   onToggle,
   onNew,
   onSwitch,
@@ -135,6 +136,16 @@ export default function DocList({
                 </div>
               ))
             )}
+          </div>
+
+          {/* 工作区标识 */}
+          <div className="doclist-workspace">
+            <svg width="12" height="12" viewBox="0 0 12 12" style={{ flexShrink: 0 }}>
+              <rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" fill="none"/>
+              <line x1="3" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1"/>
+              <line x1="3" y1="8" x2="7" y2="8" stroke="currentColor" strokeWidth="1"/>
+            </svg>
+            <span>{workspace}</span>
           </div>
         </div>
       )}

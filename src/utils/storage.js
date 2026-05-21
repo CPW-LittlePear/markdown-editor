@@ -1,17 +1,29 @@
 /**
- * localStorage 工具：多文档管理 + 设置持久化
+ * localStorage 工具：多文档管理 + 设置持久化 + workspace 隔离
  *
- * 数据结构：
- *   md-editor-docs: [{ id, title, content, updatedAt, createdAt }]
- *   md-editor-active: activeDocId
- *   md-editor-settings: { theme, fontSize, lineHeight, viewMode }
+ * 数据结构（按 workspace 前缀隔离）：
+ *   ws:<workspace>:docs: [{ id, title, content, updatedAt, createdAt }]
+ *   ws:<workspace>:active: activeDocId
+ *   ws:<workspace>:settings: { theme, fontSize, lineHeight, viewMode }
+ *
+ * 不同 workspace（通过 URL ?ws=xxx 指定）的数据完全隔离
  */
 
-const DOCS_KEY = 'md-editor-docs'
-const ACTIVE_KEY = 'md-editor-active'
-const SETTINGS_KEY = 'md-editor-settings'
+let _workspace = 'default'
 
-// 生成唯一 ID
+// 初始化当前工作区
+export function setWorkspace(name) {
+  _workspace = String(name || 'default').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30) || 'default'
+}
+
+export function getWorkspace() {
+  return _workspace
+}
+
+function key(base) {
+  return `ws:${_workspace}:${base}`
+}
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
 }
@@ -22,49 +34,36 @@ export function extractTitle(content) {
   return match ? match[1].trim() : '未命名文档'
 }
 
-/**
- * 读取所有文档列表
- */
+// ---- 文档操作 ----
+
 export function loadDocs() {
   try {
-    const raw = localStorage.getItem(DOCS_KEY)
+    const raw = localStorage.getItem(key('docs'))
     if (raw) return JSON.parse(raw)
   } catch { /* ignore */ }
   return []
 }
 
-/**
- * 保存所有文档列表
- */
 function saveDocs(docs) {
   try {
-    localStorage.setItem(DOCS_KEY, JSON.stringify(docs))
+    localStorage.setItem(key('docs'), JSON.stringify(docs))
   } catch { /* ignore */ }
 }
 
-/**
- * 获取当前活动文档 ID
- */
 export function getActiveDocId() {
   try {
-    return localStorage.getItem(ACTIVE_KEY) || null
+    return localStorage.getItem(key('active')) || null
   } catch {
     return null
   }
 }
 
-/**
- * 设置当前活动文档 ID
- */
 export function setActiveDocId(id) {
   try {
-    localStorage.setItem(ACTIVE_KEY, id)
+    localStorage.setItem(key('active'), id)
   } catch { /* ignore */ }
 }
 
-/**
- * 创建新文档，返回新文档对象
- */
 export function createDoc(title = '未命名文档', content = '') {
   const docs = loadDocs()
   const now = new Date().toISOString()
@@ -75,9 +74,6 @@ export function createDoc(title = '未命名文档', content = '') {
   return doc
 }
 
-/**
- * 更新文档内容（自动更新 updatedAt 和标题）
- */
 export function updateDoc(id, content) {
   const docs = loadDocs()
   const doc = docs.find(d => d.id === id)
@@ -89,9 +85,6 @@ export function updateDoc(id, content) {
   return doc
 }
 
-/**
- * 手动重命名文档
- */
 export function renameDoc(id, newTitle) {
   const docs = loadDocs()
   const doc = docs.find(d => d.id === id)
@@ -102,18 +95,12 @@ export function renameDoc(id, newTitle) {
   return doc
 }
 
-/**
- * 删除文档
- */
 export function deleteDoc(id) {
   let docs = loadDocs()
   docs = docs.filter(d => d.id !== id)
   saveDocs(docs)
 }
 
-/**
- * 获取指定文档
- */
 export function getDoc(id) {
   const docs = loadDocs()
   return docs.find(d => d.id === id) || null
@@ -123,13 +110,13 @@ export function getDoc(id) {
 
 export function saveSettings(settings) {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+    localStorage.setItem(key('settings'), JSON.stringify(settings))
   } catch { /* ignore */ }
 }
 
 export function loadSettings() {
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY)
+    const raw = localStorage.getItem(key('settings'))
     if (raw) return JSON.parse(raw)
   } catch { /* ignore */ }
   return {}

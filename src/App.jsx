@@ -7,6 +7,7 @@ import {
   loadDocs, createDoc, updateDoc, deleteDoc, renameDoc,
   getDoc, getActiveDocId, setActiveDocId,
   loadSettings, saveSettings, extractTitle,
+  setWorkspace, getWorkspace,
 } from './utils/storage'
 import { exportMarkdown, exportHTML } from './utils/export'
 import './App.css'
@@ -32,6 +33,11 @@ const DEFAULT_CONTENT = `# 欢迎使用 Markdown 编辑器
 `
 
 export default function App() {
+  // 初始化工作区（URL ?ws=xxx）
+  const wsParam = new URLSearchParams(window.location.search).get('ws')
+  if (wsParam) setWorkspace(wsParam)
+  const currentWs = getWorkspace()
+
   const savedSettings = loadSettings()
 
   // ---- 文档状态 ----
@@ -249,6 +255,7 @@ export default function App() {
           onDelete={handleDeleteDoc}
           onRename={handleRenameDoc}
           theme={theme}
+          workspace={currentWs}
         />
 
         <div className="content-area">
