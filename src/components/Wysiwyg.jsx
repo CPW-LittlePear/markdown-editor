@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import mermaid from 'mermaid'
+import { applyFormat } from '../utils/formatUtils'
 
 let mermaidInit = false
 function initMermaid() {
@@ -137,6 +138,30 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     setEditingIndex(null)
     if (newContent !== content) onChange(newContent)
   }, [editingIndex, editText, tokens, content, onChange])
+
+  // 编辑态暴露格式化接口给工具栏
+  useEffect(() => {
+    if (editingIndex === null) {
+      delete window.__mdEditorFormat
+      return
+    }
+    window.__mdEditorFormat = (type, value) => {
+      const ta = textareaRef.current
+      if (!ta) return
+      const start = ta.selectionStart
+      const end = ta.selectionEnd
+      const result = applyFormat(editText, start, end, type, value)
+      if (result.content !== editText) {
+        setEditText(result.content)
+        requestAnimationFrame(() => {
+          ta.focus()
+          ta.selectionStart = result.selectionStart
+          ta.selectionEnd = result.selectionEnd
+        })
+      }
+    }
+    return () => { delete window.__mdEditorFormat }
+  }, [editingIndex, editText])
 
   // 快捷键
   const handleKeyDown = useCallback((e) => {
