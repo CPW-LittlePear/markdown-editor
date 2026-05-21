@@ -18,6 +18,7 @@ export default function Editor({
   const redoStackRef = useRef([])
   const isUndoRedoRef = useRef(false)
   const lastContentRef = useRef(content)
+  const savedSelectionRef = useRef({ start: 0, end: 0 })
 
   // 记录编辑历史（用于撤回/重做）
   useEffect(() => {
@@ -177,8 +178,10 @@ export default function Editor({
     window.__mdEditorFormat = (type, value) => {
       const ta = textareaRef.current
       if (!ta) return
-      const start = ta.selectionStart
-      const end = ta.selectionEnd
+      // 优先用实时选区，失焦时用保存的选区
+      const hasFocus = document.activeElement === ta
+      const start = hasFocus ? ta.selectionStart : savedSelectionRef.current.start
+      const end = hasFocus ? ta.selectionEnd : savedSelectionRef.current.end
       const result = applyFormat(content, start, end, type, value)
       if (result.content !== content) {
         isUndoRedoRef.current = false
@@ -210,6 +213,12 @@ export default function Editor({
         onChange={(e) => onChange(e.target.value)}
         onPaste={handlePaste}
         onKeyDown={handleKeyDown}
+        onBlur={(e) => {
+          savedSelectionRef.current = {
+            start: e.target.selectionStart,
+            end: e.target.selectionEnd,
+          }
+        }}
         placeholder="开始输入 Markdown..."
         spellCheck={false}
         style={{
