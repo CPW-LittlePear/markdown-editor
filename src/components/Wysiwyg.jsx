@@ -32,10 +32,9 @@ function getTokenRaw(token) {
 export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme }) {
   const [editingIndex, setEditingIndex] = useState(null)
   const [editText, setEditText] = useState('')
-  const [pendingInsert, setPendingInsert] = useState(null) // 待插入位置(offset)
   const textareaRef = useRef(null)
   const containerRef = useRef(null)
-  const pendingInsertRef = useRef(null) // 用 ref 避免 stale closure
+  const insertOffsetRef = useRef(null) // 标记等待自动编辑的插入位置
 
   useEffect(() => { initMermaid() }, [])
 
@@ -59,35 +58,35 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     })
   }, [content])
 
-  // 插入新块后自动进入编辑态
+  // content 更新后，如果有待插入的 offset，找到新块并自动编辑
+  const prevContentRef = useRef(content)
   useEffect(() => {
-    if (pendingInsert === null) return
+    if (insertOffsetRef.current === null) {
+      prevContentRef.current = content
+      return
+    }
+    const targetOffset = insertOffsetRef.current
+    insertOffsetRef.current = null
+
+    // 在 newTokens 中找到 targetOffset 之后的第一个可编辑 token
     const newTokens = marked.lexer(content)
-    // 找 newTokens 中第一个可编辑的非空 token 作为插入的新块
-    // pendingInsert 是原 content 中的插入位置
-    // 计算新块在新 tokens 中的位置
     let pos = 0
     let targetIdx = -1
     for (let i = 0; i < newTokens.length; i++) {
       const raw = newTokens[i].raw || ''
-      if (pos >= pendingInsert && newTokens[i].type !== 'space') {
+      // 该 token 的起始位置 >= targetOffset 且不是 space
+      if (pos >= targetOffset && newTokens[i].type !== 'space') {
         targetIdx = i
         break
       }
       pos += raw.length
     }
-    // 如果找到了，设为编辑态
     if (targetIdx >= 0) {
       setEditingIndex(targetIdx)
       setEditText('')
     }
-    setPendingInsert(null)
-  }, [content, pendingInsert])
-
-  // 对外暴露插入接口
-  useEffect(() => {
-    pendingInsertRef.current = (offset) => setPendingInsert(offset)
-  }, [])
+    prevContentRef.current = content
+  }, [content])
 
   // 自动聚焦 + 自适应高度
   useEffect(() => {
@@ -171,16 +170,14 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
 
   // 插入新块
   const handleInsert = useCallback((index) => {
-    // 计算该 token 在 content 中的偏移量
     let offset = 0
     for (let i = 0; i < index; i++) {
       offset += (tokens[i]?.raw || '').length
     }
-    // 在 offset 处插入空行
     const prefix = offset > 0 && content[offset - 1] !== '\n' ? '\n' : ''
     const suffix = offset < content.length && content[offset] !== '\n' ? '\n' : ''
-    const newContent = content.slice(0, offset) + prefix + ' ' + suffix + content.slice(offset)
-    pendingInsertRef.current(offset)
+    const newContent = content.slice(0, offset) + prefix + '\n\n' + suffix + content.slice(offset)
+    insertOffsetRef.current = offset
     onChange(newContent)
   }, [content, tokens, onChange])
 
