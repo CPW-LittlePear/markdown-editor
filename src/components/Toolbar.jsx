@@ -50,6 +50,7 @@ export default function Toolbar({
   onClear, onCopy, onUndo, onRedo,
   onExportMd, onExportHtml,
   onFormat,
+  onOpenFile,
 }) {
   const [showExport, setShowExport] = useState(false)
   const [showFont, setShowFont] = useState(false)
@@ -187,6 +188,17 @@ export default function Toolbar({
         </button>
         <button className="tb-btn" title="清空内容" onClick={onClear}>
           {Icons.trash}
+        </button>
+      </div>
+
+      <Separator />
+
+      <div className="tb-group">
+        <button className="tb-btn" title="打开 .md 文件" onClick={onOpenFile}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 2h5l2 2h5v10H2V2z" stroke="currentColor" strokeWidth="1.3" fill="none"/>
+            <path d="M1 14V3l2 2" stroke="currentColor" strokeWidth="1" fill="none"/>
+          </svg>
         </button>
       </div>
 

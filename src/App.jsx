@@ -229,6 +229,32 @@ export default function App() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [handleExportMd])
 
+  // 打开本地 .md 文件
+  const fileInputRef = useRef(null)
+  const handleOpenFile = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  const handleFileSelected = useCallback((e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const text = reader.result
+      if (activeId && content.trim()) updateDoc(activeId, content)
+      const title = extractTitle(text)
+      const doc = createDoc(title, text)
+      switchingRef.current = true
+      setDocs(loadDocs())
+      setActiveIdState(doc.id)
+      setContent(text)
+      requestAnimationFrame(() => { switchingRef.current = false })
+    }
+    reader.readAsText(file, 'UTF-8')
+    // 重置 input 以允许重复打开同一文件
+    e.target.value = ''
+  }, [activeId, content])
+
   const layoutClass = `app layout-${viewMode} theme-${theme}`
 
   return (
@@ -243,6 +269,16 @@ export default function App() {
         onUndo={handleUndo} onRedo={handleRedo}
         onExportMd={handleExportMd} onExportHtml={handleExportHtml}
         onFormat={handleFormat}
+        onOpenFile={handleOpenFile}
+      />
+
+      {/* 隐藏的文件选择器 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".md,.markdown,.txt"
+        style={{ display: 'none' }}
+        onChange={handleFileSelected}
       />
 
       <div className="main-area">
