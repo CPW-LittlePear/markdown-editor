@@ -154,7 +154,7 @@ export default function App() {
     if (activeId && content.trim()) updateDoc(activeId, content)
     const doc = createDoc()
     switchingRef.current = true
-    setDocs([doc, ...loadDocs()])
+    setDocs(loadDocs())
     setActiveIdState(doc.id)
     setContent('')
     requestAnimationFrame(() => { switchingRef.current = false })
