@@ -353,6 +353,63 @@ html, body, #root {
   padding: 24px 0;
 }
 
+/* 插入按钮 */
+.wysiwyg-row {
+  position: relative;
+}
+
+.wysiwyg-insert-bar {
+  position: absolute;
+  left: -36px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 5;
+}
+
+.wysiwyg-row:hover .wysiwyg-insert-bar,
+.wysiwyg-insert-bar:hover {
+  opacity: 1;
+}
+
+.wysiwyg-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--toolbar-btn-hover);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  transition: all 0.12s;
+  border: 1px solid var(--border);
+}
+
+.wysiwyg-plus:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  transform: scale(1.1);
+}
+
+/* 独立插入条 */
+.wysiwyg-content > .wysiwyg-insert-bar {
+  position: relative;
+  left: auto;
+  top: auto;
+  margin: 2px 0 2px -36px;
+  height: 20px;
+}
+
 .wysiwyg-block {
   cursor: text;
   position: relative;

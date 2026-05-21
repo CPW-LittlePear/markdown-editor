@@ -20,43 +20,73 @@ marked.setOptions({
   langPrefix: 'hljs language-',
 })
 
-/**
- * Typora 风格 WYSIWYG 组件
- * - 只显示渲染后的预览
- * - 点击块 → 原地变为编辑态，显示 Markdown 原始符号
- * - 失焦或 Ctrl+Enter → 提交修改
- */
+function getTokenRaw(token) {
+  if (token.raw) return token.raw
+  if (token.type === 'heading') return '#'.repeat(token.depth) + ' ' + token.text + '\n'
+  if (token.type === 'paragraph') return token.text + '\n'
+  if (token.type === 'code') return '```' + (token.lang || '') + '\n' + token.text + '\n```\n'
+  return token.text || ''
+}
+
 export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme }) {
   const [editingIndex, setEditingIndex] = useState(null)
   const [editText, setEditText] = useState('')
+  const [pendingInsert, setPendingInsert] = useState(null) // 待插入位置(offset)
   const textareaRef = useRef(null)
   const containerRef = useRef(null)
+  const pendingInsertRef = useRef(null) // 用 ref 避免 stale closure
 
   useEffect(() => { initMermaid() }, [])
 
-  // marked.lexer 解析为 token 数组（保留 raw 原始文本）
+  // 解析 token
   const tokens = useMemo(() => {
-    try {
-      return marked.lexer(content)
-    } catch {
-      return []
-    }
+    try { return marked.lexer(content) } catch { return [] }
   }, [content])
 
   // mermaid 渲染
   useEffect(() => {
     if (!containerRef.current) return
-    const mermaidEls = containerRef.current.querySelectorAll('.mermaid:not(.mermaid-rendered)')
-    mermaidEls.forEach(async (el) => {
+    const els = containerRef.current.querySelectorAll('.mermaid:not(.mermaid-rendered)')
+    els.forEach(async (el) => {
       const code = el.textContent
       if (!code) return
       try {
-        const { svg } = await mermaid.render('mermaid-' + Math.random().toString(36).slice(2), code)
+        const { svg } = await mermaid.render('m-' + Math.random().toString(36).slice(2), code)
         el.innerHTML = svg
         el.classList.add('mermaid-rendered')
       } catch { /* ignore */ }
     })
   }, [content])
+
+  // 插入新块后自动进入编辑态
+  useEffect(() => {
+    if (pendingInsert === null) return
+    const newTokens = marked.lexer(content)
+    // 找 newTokens 中第一个可编辑的非空 token 作为插入的新块
+    // pendingInsert 是原 content 中的插入位置
+    // 计算新块在新 tokens 中的位置
+    let pos = 0
+    let targetIdx = -1
+    for (let i = 0; i < newTokens.length; i++) {
+      const raw = newTokens[i].raw || ''
+      if (pos >= pendingInsert && newTokens[i].type !== 'space') {
+        targetIdx = i
+        break
+      }
+      pos += raw.length
+    }
+    // 如果找到了，设为编辑态
+    if (targetIdx >= 0) {
+      setEditingIndex(targetIdx)
+      setEditText('')
+    }
+    setPendingInsert(null)
+  }, [content, pendingInsert])
+
+  // 对外暴露插入接口
+  useEffect(() => {
+    pendingInsertRef.current = (offset) => setPendingInsert(offset)
+  }, [])
 
   // 自动聚焦 + 自适应高度
   useEffect(() => {
@@ -64,30 +94,18 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
       const ta = textareaRef.current
       ta.focus()
       ta.selectionStart = ta.selectionEnd = ta.value.length
-      // 自适应高度
       ta.style.height = 'auto'
-      ta.style.height = ta.scrollHeight + 'px'
+      ta.style.height = Math.max(28, ta.scrollHeight) + 'px'
     }
   }, [editingIndex])
 
-  // 编辑文本变化时自适应高度
   useEffect(() => {
     if (editingIndex !== null && textareaRef.current) {
       const ta = textareaRef.current
       ta.style.height = 'auto'
-      ta.style.height = ta.scrollHeight + 'px'
+      ta.style.height = Math.max(28, ta.scrollHeight) + 'px'
     }
   }, [editText, editingIndex])
-
-  // 获取 token 的原始 Markdown 文本
-  const getTokenRaw = useCallback((token) => {
-    if (token.raw) return token.raw
-    // fallback: 用 text + type 重建简易 raw
-    if (token.type === 'heading') return '#'.repeat(token.depth) + ' ' + token.text + '\n'
-    if (token.type === 'paragraph') return token.text + '\n'
-    if (token.type === 'code') return '```' + (token.lang || '') + '\n' + token.text + '\n```\n'
-    return token.text || ''
-  }, [])
 
   // 开始编辑
   const startEdit = useCallback((index) => {
@@ -96,56 +114,58 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
     if (!token || token.type === 'space' || token.type === 'hr') return
     setEditingIndex(index)
     setEditText(getTokenRaw(token))
-  }, [editingIndex, tokens, getTokenRaw])
+  }, [editingIndex, tokens])
 
   // 提交编辑
   const commitEdit = useCallback(() => {
     if (editingIndex === null) return
-    // 直接替换原 content 中该 token 对应的原始文本
     const token = tokens[editingIndex]
     if (!token) { setEditingIndex(null); return }
 
     const oldRaw = getTokenRaw(token)
     const newRaw = editText
-
-    // 在原 content 中查找并替换
     const idx = content.indexOf(oldRaw)
+
+    let newContent
     if (idx === -1) {
-      // fallback: 用 tokens raw 拼接重建
       const newTokens = tokens.map((t, i) => i === editingIndex ? { ...t, raw: newRaw } : t)
-      const newContent = newTokens.map(t => t.raw || '').join('')
-      if (newContent !== content) onChange(newContent)
+      newContent = newTokens.map(t => t.raw || '').join('')
     } else {
-      const before = content.slice(0, idx)
-      const after = content.slice(idx + oldRaw.length)
-      const newContent = before + newRaw + after
-      if (newContent !== content) onChange(newContent)
+      newContent = content.slice(0, idx) + newRaw + content.slice(idx + oldRaw.length)
     }
 
     setEditingIndex(null)
-  }, [editingIndex, editText, tokens, content, onChange, getTokenRaw])
+    if (newContent !== content) onChange(newContent)
+  }, [editingIndex, editText, tokens, content, onChange])
 
   // 快捷键
   const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      setEditingIndex(null)
-    }
-    if (e.key === 'Enter' && e.ctrlKey) {
-      e.preventDefault()
-      commitEdit()
-    }
+    if (e.key === 'Escape') { e.preventDefault(); setEditingIndex(null) }
+    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); commitEdit() }
   }, [commitEdit])
 
-  // 渲染单个 token 为 HTML
+  // 插入新块
+  const handleInsert = useCallback((index) => {
+    // 计算该 token 在 content 中的偏移量
+    let offset = 0
+    for (let i = 0; i < index; i++) {
+      offset += (tokens[i]?.raw || '').length
+    }
+    // 在 offset 处插入空行
+    const prefix = offset > 0 && content[offset - 1] !== '\n' ? '\n' : ''
+    const suffix = offset < content.length && content[offset] !== '\n' ? '\n' : ''
+    const newContent = content.slice(0, offset) + prefix + ' ' + suffix + content.slice(offset)
+    pendingInsertRef.current(offset)
+    onChange(newContent)
+  }, [content, tokens, onChange])
+
+  // 渲染单个 token
   const renderToken = useCallback((token) => {
     try {
       if (token.type === 'html') return token.text
       if (token.type === 'space') return ''
       return marked.parser([token])
-    } catch {
-      return ''
-    }
+    } catch { return '' }
   }, [])
 
   return (
@@ -161,47 +181,45 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
           </div>
         )}
 
+        {/* 第一个块之前也显示插入按钮 */}
+        {tokens.length > 0 && tokens[0].type !== 'space' && (
+          <div className="wysiwyg-insert-bar" onClick={() => handleInsert(0)}>
+            <span className="wysiwyg-plus">+</span>
+          </div>
+        )}
+
         {tokens.map((token, index) => {
-          // 空 token 不渲染
+          const isEditing = editingIndex === index
+
+          // 空 token
           if (token.type === 'space' && (!token.raw || !token.raw.trim())) {
             return <div key={index} style={{ height: '0.6em' }} />
           }
 
-          const isEditing = editingIndex === index
-
-          if (isEditing) {
-            return (
-              <div key={index} className="wysiwyg-block editing">
-                <textarea
-                  ref={textareaRef}
-                  className="wysiwyg-textarea"
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  onBlur={commitEdit}
-                  onKeyDown={handleKeyDown}
-                  spellCheck={false}
-                  style={{
-                    fontSize: `${fontSize}px`,
-                    lineHeight,
-                    fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", "SF Mono", Consolas, monospace',
-                  }}
-                />
-              </div>
-            )
-          }
-
-          // 分割线不可编辑
-          if (token.type === 'hr') {
-            return (
-              <div
-                key={index}
-                className="wysiwyg-block readonly"
-                dangerouslySetInnerHTML={{ __html: renderToken(token) }}
+          const block = isEditing ? (
+            <div key={index} className="wysiwyg-block editing">
+              <textarea
+                ref={textareaRef}
+                className="wysiwyg-textarea"
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={handleKeyDown}
+                spellCheck={false}
+                style={{
+                  fontSize: `${fontSize}px`,
+                  lineHeight,
+                  fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", "SF Mono", Consolas, monospace',
+                }}
               />
-            )
-          }
-
-          return (
+            </div>
+          ) : token.type === 'hr' ? (
+            <div
+              key={index}
+              className="wysiwyg-block readonly"
+              dangerouslySetInnerHTML={{ __html: renderToken(token) }}
+            />
+          ) : (
             <div
               key={index}
               className="wysiwyg-block"
@@ -209,7 +227,24 @@ export default function Wysiwyg({ content, onChange, fontSize, lineHeight, theme
               dangerouslySetInnerHTML={{ __html: renderToken(token) }}
             />
           )
+
+          return (
+            <div key={index} className="wysiwyg-row">
+              {/* 每行之前显示插入按钮 */}
+              <div className="wysiwyg-insert-bar" onClick={(e) => { e.stopPropagation(); handleInsert(index) }}>
+                <span className="wysiwyg-plus">+</span>
+              </div>
+              {block}
+            </div>
+          )
         })}
+
+        {/* 末尾插入按钮 */}
+        {content && (
+          <div className="wysiwyg-insert-bar" onClick={() => handleInsert(tokens.length)}>
+            <span className="wysiwyg-plus">+</span>
+          </div>
+        )}
       </div>
     </div>
   )
