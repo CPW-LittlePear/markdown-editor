@@ -375,6 +375,15 @@ html, body, #root {
   margin: 0;
 }
 
+.wysiwyg-block.readonly {
+  cursor: default;
+}
+
+.wysiwyg-block.readonly:hover {
+  border-left-color: transparent;
+  background: transparent;
+}
+
 .wysiwyg-textarea {
   width: 100%;
   border: none;
