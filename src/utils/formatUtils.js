@@ -82,7 +82,7 @@ function prefixLines(content, start, end, prefix, toggle = true) {
 /**
  * 主入口：根据 formatType 应用格式
  */
-export function applyFormat(content, start, end, type) {
+export function applyFormat(content, start, end, type, value) {
   switch (type) {
     // ---- 行内格式 (包裹) ----
     case 'bold':
@@ -195,6 +195,40 @@ export function applyFormat(content, start, end, type) {
       const newContent = content.slice(0, start) + md + content.slice(end)
       const cursor = start + md.length
       return { content: newContent, selectionStart: cursor, selectionEnd: cursor }
+    }
+
+    // ---- 文字颜色（HTML span） ----
+    case 'color': {
+      const color = value || 'red'
+      if (start !== end) {
+        const text = content.slice(start, end)
+        // 如果已经包裹了同色 span，则去掉（toggle）
+        const colorRegex = new RegExp(`^<span style="color:${color}">(.+)</span>$`, 's')
+        const match = text.match(colorRegex)
+        if (match) {
+          const unwrapped = match[1]
+          const newContent = content.slice(0, start) + unwrapped + content.slice(end)
+          return {
+            content: newContent,
+            selectionStart: start,
+            selectionEnd: start + unwrapped.length,
+          }
+        }
+        const md = `<span style="color:${color}">${text}</span>`
+        const newContent = content.slice(0, start) + md + content.slice(end)
+        return {
+          content: newContent,
+          selectionStart: start + md.length,
+          selectionEnd: start + md.length,
+        }
+      }
+      const md = `<span style="color:${color}">文字</span>`
+      const newContent = content.slice(0, start) + md + content.slice(end)
+      return {
+        content: newContent,
+        selectionStart: start + 21 + color.length,
+        selectionEnd: start + 23 + color.length,
+      }
     }
 
     default:

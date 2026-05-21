@@ -6,6 +6,7 @@ const Icons = {
   bold:         <svg width="16" height="16" viewBox="0 0 16 16"><text x="8" y="13" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor" font-family="sans-serif">B</text></svg>,
   italic:       <svg width="16" height="16" viewBox="0 0 16 16"><text x="8" y="13" text-anchor="middle" font-size="13" font-style="italic" fill="currentColor" font-family="serif">I</text></svg>,
   strikethrough:<svg width="16" height="16" viewBox="0 0 16 16"><text x="8" y="11" text-anchor="middle" font-size="11" fill="currentColor" font-family="sans-serif">S</text><line x1="2" y1="13" x2="14" y2="13" stroke="currentColor" strokeWidth="1.2"/></svg>,
+  color:        <svg width="16" height="16" viewBox="0 0 16 16"><text x="8" y="13" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor" font-family="sans-serif">A</text><rect x="3" y="13" width="10" height="3" rx="1" fill="currentColor"/></svg>,
   heading:      <svg width="16" height="16" viewBox="0 0 16 16"><text x="4" y="13" font-size="12" font-weight="700" fill="currentColor" font-family="sans-serif">H</text><text x="11" y="11" font-size="8" fill="currentColor" font-family="sans-serif">1</text></svg>,
   heading2:     <svg width="16" height="16" viewBox="0 0 16 16"><text x="4" y="13" font-size="12" font-weight="700" fill="currentColor" font-family="sans-serif">H</text><text x="11" y="11" font-size="8" fill="currentColor" font-family="sans-serif">2</text></svg>,
   heading3:     <svg width="16" height="16" viewBox="0 0 16 16"><text x="4" y="13" font-size="12" font-weight="700" fill="currentColor" font-family="sans-serif">H</text><text x="11" y="11" font-size="8" fill="currentColor" font-family="sans-serif">3</text></svg>,
@@ -51,13 +52,16 @@ export default function Toolbar({
 }) {
   const [showExport, setShowExport] = useState(false)
   const [showFont, setShowFont] = useState(false)
+  const [showColor, setShowColor] = useState(false)
   const exportRef = useRef(null)
   const fontRef = useRef(null)
+  const colorRef = useRef(null)
 
   useEffect(() => {
     function handleClick(e) {
       if (exportRef.current && !exportRef.current.contains(e.target)) setShowExport(false)
       if (fontRef.current && !fontRef.current.contains(e.target)) setShowFont(false)
+      if (colorRef.current && !colorRef.current.contains(e.target)) setShowColor(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -78,6 +82,40 @@ export default function Toolbar({
         <button className="tb-btn" title="删除线 (Ctrl+Shift+X)" onClick={() => onFormat('strikethrough')}>
           {Icons.strikethrough}
         </button>
+      </div>
+
+      <Separator />
+
+      {/* 颜色选择器 */}
+      <div className="tb-dropdown" ref={colorRef}>
+        <button className="tb-btn" title="文字颜色" onClick={() => setShowColor(!showColor)}>
+          {Icons.color}
+          <span className="tb-chevron">{Icons.chevron}</span>
+        </button>
+        {showColor && (
+          <div className="tb-dropdown-menu color-menu">
+            <div className="color-grid">
+              {[
+                { name: 'black',  hex: '#000000', label: '黑色' },
+                { name: 'gray',   hex: '#808080', label: '灰色' },
+                { name: 'red',    hex: '#e74c3c', label: '红色' },
+                { name: 'blue',   hex: '#3498db', label: '蓝色' },
+                { name: 'green',  hex: '#27ae60', label: '绿色' },
+                { name: 'yellow', hex: '#f1c40f', label: '黄色' },
+                { name: 'orange', hex: '#e67e22', label: '橙色' },
+                { name: 'purple', hex: '#9b59b6', label: '紫色' },
+              ].map(c => (
+                <button
+                  key={c.name}
+                  className="color-swatch"
+                  title={c.label}
+                  style={{ background: c.hex }}
+                  onClick={() => { onFormat('color', c.name); setShowColor(false) }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <Separator />

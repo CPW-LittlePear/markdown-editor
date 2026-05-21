@@ -174,12 +174,12 @@ export default function Editor({
     }
 
     // 格式化接口
-    window.__mdEditorFormat = (type) => {
+    window.__mdEditorFormat = (type, value) => {
       const ta = textareaRef.current
       if (!ta) return
       const start = ta.selectionStart
       const end = ta.selectionEnd
-      const result = applyFormat(content, start, end, type)
+      const result = applyFormat(content, start, end, type, value)
       if (result.content !== content) {
         isUndoRedoRef.current = false
         lastContentRef.current = content

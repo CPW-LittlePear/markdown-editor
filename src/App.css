@@ -263,6 +263,33 @@ html, body, #root {
   margin: 6px 0;
 }
 
+/* 颜色选择器 */
+.color-menu {
+  min-width: auto;
+  padding: 8px;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 28px);
+  gap: 6px;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
 /* ---- 主区域 ---- */
 .main-area {
   display: flex;

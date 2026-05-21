@@ -202,7 +202,7 @@ export default function App() {
 
   const handleUndo = useCallback(() => { window.__mdEditorUndo?.() }, [])
   const handleRedo = useCallback(() => { window.__mdEditorRedo?.() }, [])
-  const handleFormat = useCallback((type) => { window.__mdEditorFormat?.(type) }, [])
+  const handleFormat = useCallback((type, value) => { window.__mdEditorFormat?.(type, value) }, [])
 
   const handleExportMd = useCallback(() => { exportMarkdown(content) }, [content])
   const handleExportHtml = useCallback(() => {
